@@ -1280,6 +1280,24 @@ impl Assembler<AArch64GeneralReg, AArch64FloatReg> for AArch64Assembler {
         add_reg64_reg64_reg64(buf, dst, src1, src2);
     }
 
+    fn adds_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: AArch64GeneralReg,
+        src1: AArch64GeneralReg,
+        src2: AArch64GeneralReg,
+    ) {
+        adds_reg64_reg64_reg64(buf, dst, src1, src2);
+    }
+
+    fn addc_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: AArch64GeneralReg,
+        src1: AArch64GeneralReg,
+        src2: AArch64GeneralReg,
+    ) {
+        adc_reg64_reg64_reg64(buf, dst, src1, src2);
+    }
+
     #[inline(always)]
     fn add_freg32_freg32_freg32(
         buf: &mut Vec<'_, u8>,
@@ -1890,6 +1908,24 @@ impl Assembler<AArch64GeneralReg, AArch64FloatReg> for AArch64Assembler {
     ) {
         sub_reg64_reg64_reg64(buf, dst, src1, src2);
     }
+    #[inline(always)]
+    fn subs_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: AArch64GeneralReg,
+        src1: AArch64GeneralReg,
+        src2: AArch64GeneralReg,
+    ) {
+        subs_reg64_reg64_reg64(buf, dst, src1, src2);
+    }
+    #[inline(always)]
+    fn subc_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: AArch64GeneralReg,
+        src1: AArch64GeneralReg,
+        src2: AArch64GeneralReg,
+    ) {
+        sbc_reg64_reg64_reg64(buf, dst, src1, src2);
+    }
 
     #[inline(always)]
     fn eq_reg_reg_reg(
@@ -2341,6 +2377,58 @@ impl ArithmeticShifted {
     }
 }
 
+#[derive(PackedStruct)]
+#[packed_struct(endian = "msb")]
+pub struct ArithmeticCarry {
+    sf: bool,
+    op: bool, // add or subtract
+    s: bool,
+    fixed: Integer<u8, packed_bits::Bits<8>>, // = 0b11011_000,
+    reg_m: Integer<u8, packed_bits::Bits<5>>,
+    imm6: Integer<u8, packed_bits::Bits<6>>,
+    reg_n: Integer<u8, packed_bits::Bits<5>>,
+    reg_d: Integer<u8, packed_bits::Bits<5>>,
+}
+
+impl Aarch64Bytes for ArithmeticCarry {}
+
+pub struct ArithmeticCarryParams {
+    op: bool,
+    s: bool,
+    imm6: u8,
+    rm: AArch64GeneralReg,
+    rn: AArch64GeneralReg,
+    rd: AArch64GeneralReg,
+}
+
+impl ArithmeticCarry {
+    #[inline(always)]
+    fn new(
+        ArithmeticCarryParams {
+            op,
+            s,
+            imm6,
+            rm,
+            rn,
+            rd,
+        }: ArithmeticCarryParams,
+    ) -> Self {
+        debug_assert!(imm6 <= 0b111111);
+
+        Self {
+            // true for 64 bit addition
+            // false for 32 bit addition
+            sf: true,
+            fixed: 0b11011000.into(),
+            op,
+            s,
+            reg_m: rm.id().into(),
+            imm6: imm6.into(),
+            reg_d: rd.id().into(),
+            reg_n: rn.id().into(),
+        }
+    }
+}
 // ARM manual section C1.2.4
 #[derive(Copy, Clone, PartialEq)]
 #[allow(dead_code)]
@@ -3257,6 +3345,47 @@ fn add_reg64_reg64_reg64(
     buf.extend(inst.bytes());
 }
 
+/// `ADDS Xd, Xm, Xn` -> Add Xm and Xn and place the result into Xd (Set flags).
+#[inline(always)]
+fn adds_reg64_reg64_reg64(
+    buf: &mut Vec<'_, u8>,
+    dst: AArch64GeneralReg,
+    src1: AArch64GeneralReg,
+    src2: AArch64GeneralReg,
+) {
+    let inst = ArithmeticShifted::new(ArithmeticShiftedParams {
+        op: false,
+        s: true,
+        shift: ShiftType::LSL,
+        imm6: 0,
+        rm: src2,
+        rn: src1,
+        rd: dst,
+    });
+
+    buf.extend(inst.bytes());
+}
+
+/// `ADC Xd, Xm, Xn` -> Add Xm, Xn, and carry bit; and place the result into Xd.
+#[inline(always)]
+fn adc_reg64_reg64_reg64(
+    buf: &mut Vec<'_, u8>,
+    dst: AArch64GeneralReg,
+    src1: AArch64GeneralReg,
+    src2: AArch64GeneralReg,
+) {
+    let inst = ArithmeticCarry::new(ArithmeticCarryParams {
+        op: false,
+        s: false,
+        imm6: 0,
+        rm: src2,
+        rn: src1,
+        rd: dst,
+    });
+
+    buf.extend(inst.bytes());
+}
+
 /// `AND Xd, Xn, Xm` -> Bitwise AND Xn and Xm and place the result into Xd.
 #[inline(always)]
 fn and_reg64_reg64_reg64(
@@ -3873,6 +4002,26 @@ fn subs_reg64_reg64_reg64_with_shift(
         s: true,
         shift,
         imm6: amount,
+        rm: src2,
+        rn: src1,
+        rd: dst,
+    });
+
+    buf.extend(inst.bytes());
+}
+
+/// `SBC Xd, Xm, Xn` -> Subtract Xm, Xn, and carry bit; and place the result into Xd.
+#[inline(always)]
+fn sbc_reg64_reg64_reg64(
+    buf: &mut Vec<'_, u8>,
+    dst: AArch64GeneralReg,
+    src1: AArch64GeneralReg,
+    src2: AArch64GeneralReg,
+) {
+    let inst = ArithmeticCarry::new(ArithmeticCarryParams {
+        op: true,
+        s: false,
+        imm6: 0,
         rm: src2,
         rn: src1,
         rd: dst,

@@ -179,6 +179,22 @@ pub trait Assembler<GeneralReg: RegTrait, FloatReg: RegTrait>: Sized + Copy {
         src2: GeneralReg,
     );
 
+    /// add and set flags
+    fn adds_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: GeneralReg,
+        src1: GeneralReg,
+        src2: GeneralReg,
+    );
+
+    /// add with carry bit
+    fn addc_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: GeneralReg,
+        src1: GeneralReg,
+        src2: GeneralReg,
+    );
+
     fn add_freg32_freg32_freg32(
         buf: &mut Vec<'_, u8>,
         dst: FloatReg,
@@ -664,6 +680,20 @@ pub trait Assembler<GeneralReg: RegTrait, FloatReg: RegTrait>: Sized + Copy {
 
     fn sub_reg64_reg64_imm32(buf: &mut Vec<'_, u8>, dst: GeneralReg, src1: GeneralReg, imm32: i32);
     fn sub_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: GeneralReg,
+        src1: GeneralReg,
+        src2: GeneralReg,
+    );
+
+    fn subs_reg64_reg64_reg64(
+        buf: &mut Vec<'_, u8>,
+        dst: GeneralReg,
+        src1: GeneralReg,
+        src2: GeneralReg,
+    );
+
+    fn subc_reg64_reg64_reg64(
         buf: &mut Vec<'_, u8>,
         dst: GeneralReg,
         src1: GeneralReg,
@@ -1404,8 +1434,40 @@ impl<
                 ASM::add_reg64_reg64_reg64(&mut self.buf, dst_reg, src1_reg, src2_reg);
             }
             IntWidth::I128 | IntWidth::U128 => {
-                let intrinsic = bitcode::NUM_ADD_WRAP_INT[int_width].to_string();
-                self.build_fn_call(dst, intrinsic, &[*src1, *src2], &[*layout, *layout], layout);
+                // put the arguments on the stack
+                let (src1_offset, _) = self.storage_manager.stack_offset_and_size(src1);
+                let (src2_offset, _) = self.storage_manager.stack_offset_and_size(src2);
+                let dst_offset = self.storage_manager.claim_stack_area_layout(
+                    self.layout_interner,
+                    *dst,
+                    *layout,
+                );
+
+                let tmp1_sym = self.debug_symbol("add_wrap_tmp1");
+                let tmp2_sym = self.debug_symbol("add_wrap_tmp2");
+                let tmp3_sym = self.debug_symbol("add_wrap_tmp3");
+                let tmp4_sym = self.debug_symbol("add_wrap_tmp4");
+
+                let buf = &mut self.buf;
+
+                let tmp1 = self.storage_manager.claim_general_reg(buf, &tmp1_sym);
+                let tmp2 = self.storage_manager.claim_general_reg(buf, &tmp2_sym);
+                let tmp3 = self.storage_manager.claim_general_reg(buf, &tmp3_sym);
+                let tmp4 = self.storage_manager.claim_general_reg(buf, &tmp4_sym);
+
+                ASM::mov_reg64_base32(buf, tmp1, src1_offset);
+                ASM::mov_reg64_base32(buf, tmp2, src2_offset);
+                ASM::mov_reg64_base32(buf, tmp3, src1_offset + 8);
+                ASM::mov_reg64_base32(buf, tmp4, src2_offset + 8);
+                ASM::adds_reg64_reg64_reg64(buf, tmp1, tmp1, tmp2);
+                ASM::addc_reg64_reg64_reg64(buf, tmp3, tmp3, tmp4);
+                ASM::mov_base32_reg64(buf, dst_offset, tmp1);
+                ASM::mov_base32_reg64(buf, dst_offset + 8, tmp3);
+
+                self.storage_manager.free_symbol(&tmp1_sym);
+                self.storage_manager.free_symbol(&tmp2_sym);
+                self.storage_manager.free_symbol(&tmp3_sym);
+                self.storage_manager.free_symbol(&tmp4_sym);
             }
         }
     }
@@ -1849,8 +1911,40 @@ impl<
                 ASM::sub_reg64_reg64_reg64(&mut self.buf, dst_reg, src1_reg, src2_reg);
             }
             IntWidth::I128 | IntWidth::U128 => {
-                let intrinsic = bitcode::NUM_SUB_WRAP_INT[int_width].to_string();
-                self.build_fn_call(dst, intrinsic, &[*src1, *src2], &[*layout, *layout], layout);
+                // put the arguments on the stack
+                let (src1_offset, _) = self.storage_manager.stack_offset_and_size(src1);
+                let (src2_offset, _) = self.storage_manager.stack_offset_and_size(src2);
+                let dst_offset = self.storage_manager.claim_stack_area_layout(
+                    self.layout_interner,
+                    *dst,
+                    *layout,
+                );
+
+                let tmp1_sym = self.debug_symbol("add_wrap_tmp1");
+                let tmp2_sym = self.debug_symbol("add_wrap_tmp2");
+                let tmp3_sym = self.debug_symbol("add_wrap_tmp3");
+                let tmp4_sym = self.debug_symbol("add_wrap_tmp4");
+
+                let buf = &mut self.buf;
+
+                let tmp1 = self.storage_manager.claim_general_reg(buf, &tmp1_sym);
+                let tmp2 = self.storage_manager.claim_general_reg(buf, &tmp2_sym);
+                let tmp3 = self.storage_manager.claim_general_reg(buf, &tmp3_sym);
+                let tmp4 = self.storage_manager.claim_general_reg(buf, &tmp4_sym);
+
+                ASM::mov_reg64_base32(buf, tmp1, src1_offset);
+                ASM::mov_reg64_base32(buf, tmp2, src2_offset);
+                ASM::mov_reg64_base32(buf, tmp3, src1_offset + 8);
+                ASM::mov_reg64_base32(buf, tmp4, src2_offset + 8);
+                ASM::subs_reg64_reg64_reg64(buf, tmp1, tmp1, tmp2);
+                ASM::subc_reg64_reg64_reg64(buf, tmp3, tmp3, tmp4);
+                ASM::mov_base32_reg64(buf, dst_offset, tmp1);
+                ASM::mov_base32_reg64(buf, dst_offset + 8, tmp3);
+
+                self.storage_manager.free_symbol(&tmp1_sym);
+                self.storage_manager.free_symbol(&tmp2_sym);
+                self.storage_manager.free_symbol(&tmp3_sym);
+                self.storage_manager.free_symbol(&tmp4_sym);
             }
         }
     }

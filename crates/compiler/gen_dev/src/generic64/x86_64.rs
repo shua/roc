@@ -1993,6 +1993,17 @@ impl Assembler<X86_64GeneralReg, X86_64FloatReg> for X86_64Assembler {
     }
 
     #[inline(always)]
+    fn adds_reg64_reg64_reg64(buf: &mut Vec<'_, u8>, dst: Reg64, src1: Reg64, src2: Reg64) {
+        // normal add sets the carry flags
+        binop_move_src_to_dst_reg64(buf, add_reg64_reg64, dst, src1, src2)
+    }
+
+    #[inline(always)]
+    fn addc_reg64_reg64_reg64(buf: &mut Vec<'_, u8>, dst: Reg64, src1: Reg64, src2: Reg64) {
+        binop_move_src_to_dst_reg64(buf, adc_reg64_reg64, dst, src1, src2)
+    }
+
+    #[inline(always)]
     fn add_freg32_freg32_freg32(
         buf: &mut Vec<'_, u8>,
         dst: X86_64FloatReg,
@@ -2646,6 +2657,19 @@ impl Assembler<X86_64GeneralReg, X86_64FloatReg> for X86_64Assembler {
     }
 
     #[inline(always)]
+    fn subs_reg64_reg64_reg64(buf: &mut Vec<'_, u8>, dst: Reg64, src1: Reg64, src2: Reg64) {
+        // standard sub sets the borrow bit
+        mov_reg64_reg64(buf, dst, src1);
+        sub_reg64_reg64(buf, dst, src2);
+    }
+
+    #[inline(always)]
+    fn subc_reg64_reg64_reg64(buf: &mut Vec<'_, u8>, dst: Reg64, src1: Reg64, src2: Reg64) {
+        mov_reg64_reg64(buf, dst, src1);
+        sbb_reg64_reg64(buf, dst, src2);
+    }
+
+    #[inline(always)]
     fn eq_reg_reg_reg(
         buf: &mut Vec<'_, u8>,
         register_width: RegisterWidth,
@@ -3080,6 +3104,12 @@ fn add_reg64_imm32(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, imm: i32) {
 #[inline(always)]
 fn add_reg64_reg64(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, src: X86_64GeneralReg) {
     binop_reg64_reg64(0x01, buf, dst, src);
+}
+
+/// `ADC r/m64,r64` -> Add with carry r64 to r/m64
+#[inline(always)]
+fn adc_reg64_reg64(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, src: X86_64GeneralReg) {
+    binop_reg64_reg64(0x11, buf, dst, src);
 }
 
 /// `AND r/m64,r64` -> Bitwise logical and r64 to r/m64.
@@ -4370,6 +4400,12 @@ fn sub_reg64_imm32(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, imm: i32) {
 #[inline(always)]
 fn sub_reg64_reg64(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, src: X86_64GeneralReg) {
     binop_reg64_reg64(0x29, buf, dst, src);
+}
+
+/// `SBB r/m64,r64` -> Sub r64 to r/m64 with borrow.
+#[inline(always)]
+fn sbb_reg64_reg64(buf: &mut Vec<'_, u8>, dst: X86_64GeneralReg, src: X86_64GeneralReg) {
+    binop_reg64_reg64(0x19, buf, dst, src);
 }
 
 /// `POP r64` -> Pop top of stack into r64; increment stack pointer. Cannot encode 32-bit operand size.
