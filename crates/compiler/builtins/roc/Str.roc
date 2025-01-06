@@ -328,7 +328,8 @@
 ## Currently, the only way to get seamless slices of strings is by calling certain `Str` functions which return them. In general, `Str` functions which accept a string and return a subset of that string tend to do this. [`Str.trim`](https://www.roc-lang.org/builtins/Str#trim) is another example of a function which returns a seamless slice.
 module [
     Utf8Problem,
-    Utf8ByteProblem,
+    Utf16Problem,
+    Utf32Problem,
     concat,
     isEmpty,
     joinWith,
@@ -337,6 +338,11 @@ module [
     countUtf8Bytes,
     toUtf8,
     fromUtf8,
+    fromUtf16,
+    fromUtf32,
+    fromUtf8Lossy,
+    fromUtf16Lossy,
+    fromUtf32Lossy,
     startsWith,
     endsWith,
     trim,
@@ -376,7 +382,7 @@ import Result exposing [Result]
 import List
 import Num exposing [Num, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128, F32, F64, Dec]
 
-Utf8ByteProblem : [
+Utf8Problem : [
     InvalidStartByte,
     UnexpectedEndOfSequence,
     ExpectedContinuation,
@@ -385,7 +391,14 @@ Utf8ByteProblem : [
     EncodesSurrogateHalf,
 ]
 
-Utf8Problem : { byteIndex : U64, problem : Utf8ByteProblem }
+Utf16Problem : [
+    EncodesSurrogateHalf,
+]
+
+Utf32Problem : [
+    CodepointTooLarge,
+    EncodesSurrogateHalf,
+]
 
 ## Returns [Bool.true] if the string is empty, and [Bool.false] otherwise.
 ## ```roc
@@ -538,7 +551,7 @@ toUtf8 : Str -> List U8
 ## expect Str.fromUtf8 [] == Ok ""
 ## expect Str.fromUtf8 [255] |> Result.isErr
 ## ```
-fromUtf8 : List U8 -> Result Str [BadUtf8 { problem : Utf8ByteProblem, index : U64 }]
+fromUtf8 : List U8 -> Result Str [BadUtf8 { problem : Utf8Problem, index : U64 }]
 fromUtf8 = \bytes ->
     result = fromUtf8Lowlevel bytes
 
@@ -557,10 +570,132 @@ FromUtf8Result : {
     aByteIndex : U64,
     bString : Str,
     cIsOk : Bool,
-    dProblemCode : Utf8ByteProblem,
+    dProblemCode : Utf8Problem,
 }
 
 fromUtf8Lowlevel : List U8 -> FromUtf8Result
+
+## Converts a [List] of [U8] UTF-8 [code units](https://unicode.org/glossary/#code_unit) to a string.
+## Any grouping of invalid byte sequences are replaced with a single unicode replacement character '�'.
+##
+## An invalid byte sequence is defined as
+## - a 2-byte-sequence starting byte, followed by less than 1 continuation byte
+## - a 3-byte-sequence starting byte, followed by less than 2 continuation bytes
+## - a 4-byte-sequence starting byte, followed by less than 3 continuation bytes
+## - an invalid codepoint from the surrogate pair block
+## - an invalid codepoint greater than 0x110000 encoded as a 4-byte sequence
+## - any valid codepoint encoded as an incorrect sequence, for instance a codepoint that should be a 2-byte sequence encoded as a 3- or 4-byte sequence
+##
+## ```roc
+## expect (Str.fromUtf8Lossy [82, 111, 99, 240, 159, 144, 166]) == "Roc🐦"
+## expect (Str.fromUtf8Lossy [82, 255, 99]) == "R�c"
+## expect (Str.fromUtf8Lossy [82, 0xED, 0xA0, 0xBD, 99]) == "R�c"
+## ```
+fromUtf8Lossy : List U8 -> Str
+
+expect (Str.fromUtf8Lossy [82, 111, 99, 240, 159, 144, 166]) == "Roc🐦"
+expect (Str.fromUtf8Lossy [82, 255, 99]) == "R�c"
+expect (Str.fromUtf8Lossy [82, 0xED, 0xA0, 0xBD, 99]) == "R�c"
+
+## Converts a [List] of [U16] UTF-16 (little-endian) [code units](https://unicode.org/glossary/#code_unit) to a string.
+##
+## ```roc
+## expect (Str.fromUtf16 [82, 111, 99]) == Ok "Roc"
+## expect (Str.fromUtf16 [0xb9a, 0xbbf]) == Ok "சி"
+## expect (Str.fromUtf16 [0xd83d, 0xdc26]) == Ok "🐦"
+## expect (Str.fromUtf16 []) == Ok ""
+## # unpaired surrogates, first and second halves
+## expect (Str.fromUtf16 [82, 0xd83d, 99]) |> Result.isErr
+## expect (Str.fromUtf16 [82, 0xdc96, 99]) |> Result.isErr
+## ```
+fromUtf16 : List U16 -> Result Str [BadUtf16 { problem : Utf16Problem, index : U64 }]
+fromUtf16 = \codeunits ->
+    result = fromUtf16Lowlevel codeunits
+
+    if result.cIsOk then
+        Ok result.bString
+    else
+        Err (BadUtf16 { problem: result.dProblemCode, index: result.aByteIndex })
+
+expect (Str.fromUtf16 [82, 111, 99]) == Ok "Roc"
+expect (Str.fromUtf16 [0xb9a, 0xbbf]) == Ok "சி"
+expect (Str.fromUtf16 [0xd83d, 0xdc26]) == Ok "🐦"
+expect (Str.fromUtf16 []) == Ok ""
+# unpaired surrogates, first and second halves
+expect (Str.fromUtf16 [82, 0xd83d, 99]) |> Result.isErr
+expect (Str.fromUtf16 [82, 0xdc96, 99]) |> Result.isErr
+
+FromUtf16Result : {
+    aByteIndex : U64,
+    bString : Str,
+    cIsOk : Bool,
+    dProblemCode : Utf16Problem,
+}
+
+fromUtf16Lowlevel : List U16 -> FromUtf16Result
+
+## Converts a [List] of [U16] UTF-16 (little-endian) [code units](https://unicode.org/glossary/#code_unit) to a string.
+## Any unpaired surrogate code unit is replaced with a single unicode replacement character '�'.
+##
+## ```roc
+## expect (Str.fromUtf16Lossy [82, 111, 99, 0xd83d, 0xdc26]) == "Roc🐦"
+## expect (Str.fromUtf16Lossy [82, 0xdc96, 99]) == "R�c"
+## ```
+fromUtf16Lossy : List U16 -> Str
+
+expect (Str.fromUtf16Lossy [82, 111, 99, 0xd83d, 0xdc26]) == "Roc🐦"
+expect (Str.fromUtf16Lossy [82, 0xdc96, 99]) == "R�c"
+
+## Converts a [List] of [U32] UTF-32 [code units](https://unicode.org/glossary/#code_unit) to a string.
+##
+## ```roc
+## expect (Str.fromUtf32 [82, 111, 99]) == Ok "Roc"
+## expect (Str.fromUtf32 [0xb9a, 0xbbf]) == Ok "சி"
+## expect (Str.fromUtf32 [0x1f426]) == Ok "🐦"
+## # unpaired surrogates, first and second halves
+## expect (Str.fromUtf32 [82, 0xd83d, 99]) |> Result.isErr
+## expect (Str.fromUtf32 [82, 0xdc96, 99]) |> Result.isErr
+## # invalid codepoint
+## expect (Str.fromUtf32 [82, 0x110000, 99]) |> Result.isErr
+## ```
+fromUtf32 : List U32 -> Result Str [BadUtf32 { problem : Utf32Problem, index : U64 }]
+fromUtf32 = \codepoints ->
+    result = fromUtf32Lowlevel codepoints
+
+    if result.cIsOk then
+        Ok result.bString
+    else
+        Err (BadUtf32 { problem: result.dProblemCode, index: result.aByteIndex })
+
+FromUtf32Result : {
+    aByteIndex : U64,
+    bString : Str,
+    cIsOk : Bool,
+    dProblemCode : Utf32Problem,
+}
+
+fromUtf32Lowlevel : List U32 -> FromUtf32Result
+
+expect (Str.fromUtf32 [82, 111, 99]) == Ok "Roc"
+expect (Str.fromUtf32 [0xb9a, 0xbbf]) == Ok "சி"
+expect (Str.fromUtf32 [0x1f426]) == Ok "🐦"
+expect (Str.fromUtf32 []) == Ok ""
+# unpaired surrogates, first and second halves
+expect (Str.fromUtf32 [82, 0xd83d, 99]) |> Result.isErr
+expect (Str.fromUtf32 [82, 0xdc96, 99]) |> Result.isErr
+# codepoint out of valid range
+expect (Str.fromUtf32 [82, 0x110000, 99]) |> Result.isErr
+
+## Converts a [List] of [U32] UTF-32 [code units](https://unicode.org/glossary/#code_unit) to a string.
+## Any invalid code points are replaced with a single unicode replacement character '�'.
+## ```roc
+## expect (Str.fromUtf32Lossy [82, 111, 99, 0x1f426]) == "Roc🐦"
+## expect (Str.fromUtf32Lossy [82, 0x110000, 99]) == "R�c"
+## ```
+fromUtf32Lossy : List U32 -> Str
+
+expect (Str.fromUtf32Lossy [82, 111, 99, 0x1f426]) == "Roc🐦"
+expect (Str.fromUtf32Lossy [82, 0x110000, 99]) == "R�c"
 
 ## Check if the given [Str] starts with a value.
 ## ```roc

@@ -1677,6 +1677,41 @@ trait Backend<'a> {
                     ret_layout,
                 )
             }
+            LowLevel::StrFromUtf16 => self.build_fn_call(
+                sym,
+                bitcode::STR_FROM_UTF16.to_string(),
+                args,
+                arg_layouts,
+                ret_layout,
+            ),
+            LowLevel::StrFromUtf32 => self.build_fn_call(
+                sym,
+                bitcode::STR_FROM_UTF32.to_string(),
+                args,
+                arg_layouts,
+                ret_layout,
+            ),
+            LowLevel::StrFromUtf8Lossy => self.build_fn_call(
+                sym,
+                bitcode::STR_FROM_UTF8_LOSSY.to_string(),
+                args,
+                arg_layouts,
+                ret_layout,
+            ),
+            LowLevel::StrFromUtf16Lossy => self.build_fn_call(
+                sym,
+                bitcode::STR_FROM_UTF16_LOSSY.to_string(),
+                args,
+                arg_layouts,
+                ret_layout,
+            ),
+            LowLevel::StrFromUtf32Lossy => self.build_fn_call(
+                sym,
+                bitcode::STR_FROM_UTF32_LOSSY.to_string(),
+                args,
+                arg_layouts,
+                ret_layout,
+            ),
             LowLevel::StrRepeat => self.build_fn_call(
                 sym,
                 bitcode::STR_REPEAT.to_string(),

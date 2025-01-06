@@ -1377,8 +1377,8 @@ define_builtins! {
         7 STR_STARTS_WITH: "startsWith"
         8 STR_ENDS_WITH: "endsWith"
         9 STR_FROM_UTF8: "fromUtf8"
-        10 STR_UT8_PROBLEM: "Utf8Problem" // the Utf8Problem type alias
-        11 STR_UT8_BYTE_PROBLEM: "Utf8ByteProblem" // the Utf8ByteProblem type alias
+        10 STR_FROM_UTF8_LOSSY: "fromUtf8Lossy"
+        11 STR_UTF8_BYTE_PROBLEM: "Utf8Problem"
         12 STR_TO_UTF8: "toUtf8"
         13 STR_WALK_UTF8: "walkUtf8"
         14 STR_ALIAS_ANALYSIS_STATIC: "#aliasAnalysisStatic" // string with the static lifetime
@@ -1418,6 +1418,14 @@ define_builtins! {
         48 STR_RELEASE_EXCESS_CAPACITY: "releaseExcessCapacity"
         49 STR_DROP_PREFIX: "dropPrefix"
         50 STR_DROP_SUFFIX: "dropSuffix"
+        51 STR_FROM_UTF16: "fromUtf16"
+        52 STR_FROM_UTF16_LOSSY: "fromUtf16Lossy"
+        53 STR_UTF16_PROBLEM: "Utf16Problem"
+        54 STR_FROM_UTF32: "fromUtf32"
+        55 STR_FROM_UTF32_LOSSY: "fromUtf32Lossy"
+        56 STR_UTF32_PROBLEM: "Utf32Problem"
+        57 STR_FROM_UTF16_LOWLEVEL: "fromUtf16Lowlevel"
+        58 STR_FROM_UTF32_LOWLEVEL: "fromUtf32Lowlevel"
     }
     6 LIST: "List" => {
         0 LIST_LIST: "List" exposed_apply_type=true // the List.List type alias

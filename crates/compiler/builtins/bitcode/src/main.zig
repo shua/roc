@@ -203,6 +203,11 @@ comptime {
     exportStrFn(str.reserveC, "reserve");
     exportStrFn(str.strToUtf8C, "to_utf8");
     exportStrFn(str.fromUtf8C, "from_utf8");
+    exportStrFn(str.fromUtf16, "from_utf16");
+    exportStrFn(str.fromUtf32, "from_utf32");
+    exportStrFn(str.fromUtf8Lossy, "from_utf8_lossy");
+    exportStrFn(str.fromUtf16Lossy, "from_utf16_lossy");
+    exportStrFn(str.fromUtf32Lossy, "from_utf32_lossy");
     exportStrFn(str.repeatC, "repeat");
     exportStrFn(str.strTrim, "trim");
     exportStrFn(str.strTrimStart, "trim_start");
